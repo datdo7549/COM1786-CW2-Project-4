@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.webkit.URLUtil
@@ -38,16 +37,28 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>() {
         initViewModel()
     }
 
+    private fun initViewModel() = with(viewModel) {
+        getCurrentUrl(0)
+        currentUrlLiveData.observe(viewLifecycleOwner) {
+            if (it.url.isNotEmpty() && URLUtil.isValidUrl(it.url)) {
+                Glide.with(requireActivity()).load(it.url).error(R.drawable.error).into(viewBinding.imgImage)
+            } else {
+                val file = File(it.url)
+                if (file.exists()) {
+                    viewBinding.imgImage.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+                }
+            }
+        }
+    }
+
     private fun initView() = with(viewBinding) {
+        initButton()
+    }
+
+    private fun initButton() = with(viewBinding) {
         btnAddUrl.setOnClickListener {
             val url = edtImageUrl.text.toString()
-            if (URLUtil.isValidUrl(url)) {
-                viewBinding.edtImageUrl.text?.clear()
-                viewBinding.edtImageUrl.clearFocus()
-                viewModel.addUrl(url)
-            } else {
-                Toast.makeText(requireContext(), "Invalid url!", Toast.LENGTH_SHORT).show()
-            }
+            saveUrlToDb(url)
         }
 
         btnCamera.setOnClickListener {
@@ -63,6 +74,16 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>() {
         }
     }
 
+    private fun saveUrlToDb(url: String) {
+        if (URLUtil.isValidUrl(url)) {
+            viewBinding.edtImageUrl.text?.clear()
+            viewBinding.edtImageUrl.clearFocus()
+            viewModel.addUrl(url)
+        } else {
+            Toast.makeText(requireContext(), "Invalid url!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun dispatchTakePictureIntent() {
         val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
         if (takePictureIntent.resolveActivity(requireActivity().packageManager) != null) {
@@ -72,23 +93,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == 1 && resultCode == Activity.RESULT_OK) {
-            val imageBitmap = data?.extras?.get("data") as Bitmap
-            saveImage(imageBitmap)
+            saveImage(data?.extras?.get("data") as Bitmap)
         }
     }
 
     private fun saveImage(bitmap: Bitmap) {
-        val displayName = "my_picture.jpg"
-        val mimeType = "image/jpeg"
-        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
-            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+            put(MediaStore.Images.Media.DISPLAY_NAME, "my_picture.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
         }
-        val contentResolver = context?.contentResolver
-        val imageUri = contentResolver?.insert(collection, values)
-        contentResolver?.openOutputStream(imageUri!!).use { outputStream ->
+        val imageUri = context?.contentResolver?.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+        context?.contentResolver?.openOutputStream(imageUri!!).use { outputStream ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
         }
 
@@ -98,38 +114,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding, HomeViewModel>() {
         }
     }
 
-    private fun initViewModel() = with(viewModel) {
-        getCurrentUrl(0)
-        currentUrl.observe(viewLifecycleOwner) {
-            if (it.url.isNotEmpty() && URLUtil.isValidUrl(it.url)) {
-                Glide
-                    .with(requireActivity())
-                    .load(it.url)
-                    .centerCrop()
-                    .error(R.drawable.error)
-                    .into(viewBinding.imvShowImage)
-            } else {
-                val file = File(it.url)
-                if (file.exists()) {
-                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                    viewBinding.imvShowImage.setImageBitmap(bitmap)
-                    Log.d("alo123", "onActivityResult: ")
-                }
-            }
-        }
+    companion object {
+        fun newInstance() = HomeFragment()
     }
 
     private fun getRealPathImage(uri: Uri): String {
-        arrayOf(MediaStore.Images.Media.DATA)
-        val cursor = requireContext().contentResolver.query(uri, arrayOf(MediaStore.Images.Media.DATA), null, null, null)
+        val cursor = requireContext().contentResolver.query(
+            uri,
+            arrayOf(MediaStore.Images.Media.DATA),
+            null,
+            null,
+            null
+        )
         val columnIndex = cursor!!.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
         cursor.moveToFirst()
         val filePath = cursor.getString(columnIndex)
         cursor.close()
         return filePath
-    }
-
-    companion object {
-        fun newInstance() = HomeFragment()
     }
 }

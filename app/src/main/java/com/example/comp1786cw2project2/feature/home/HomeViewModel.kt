@@ -13,44 +13,41 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val urlDao: UrlDao
 ) : BaseViewModel() {
-    private var _currentUrl: MutableLiveData<Url> = MutableLiveData()
-    var currentUrl : LiveData<Url> = _currentUrl
+    private var _currentUrlMutableLiveData: MutableLiveData<Url> = MutableLiveData()
+    var currentUrlLiveData : LiveData<Url> = _currentUrlMutableLiveData
     private var currentIndex = 0
 
     fun addUrl(url: String) {
         urlDao.addUrl(Url(url = url))
-        val currentListUrl = urlDao.getListUrl()
-        currentIndex = currentListUrl.size - 1
-        _currentUrl.value = Url(url = url)
+        currentIndex = urlDao.getListUrl().size - 1
+        _currentUrlMutableLiveData.value = Url(url = url)
+    }
+
+    fun onNextClicked() {
+        val range = urlDao.getListUrl().indices
+        currentIndex++
+        if (urlDao.getListUrl().isNotEmpty() && currentIndex in range) {
+            getCurrentUrl(currentIndex)
+        } else {
+            currentIndex--
+        }
     }
 
     fun getCurrentUrl(index: Int) {
         val currentListUrl = urlDao.getListUrl()
         val range = currentListUrl.indices
         if (currentListUrl.isNotEmpty() && index in range) {
-            _currentUrl.value = currentListUrl[index]
+            _currentUrlMutableLiveData.value = currentListUrl[index]
         }
     }
 
     fun onPreviousClicked() {
-        val currentListUrl = urlDao.getListUrl()
-        val range = currentListUrl.indices
+        val range = urlDao.getListUrl().indices
         currentIndex--
-        if (currentListUrl.isNotEmpty() && currentIndex in range) {
+        if (urlDao.getListUrl().isNotEmpty() && currentIndex in range) {
             getCurrentUrl(currentIndex)
         } else {
             currentIndex++
-        }
-    }
-
-    fun onNextClicked() {
-        val currentListUrl = urlDao.getListUrl()
-        val range = currentListUrl.indices
-        currentIndex++
-        if (currentListUrl.isNotEmpty() && currentIndex in range) {
-            getCurrentUrl(currentIndex)
-        } else {
-            currentIndex--
         }
     }
 }
